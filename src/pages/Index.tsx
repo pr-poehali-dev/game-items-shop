@@ -22,6 +22,19 @@ interface Product {
   rating: number;
   seller: string;
   inStock: boolean;
+  sellerId?: string;
+}
+
+interface Transaction {
+  id: number;
+  productId: number;
+  productTitle: string;
+  buyerId: string;
+  sellerId: string;
+  amount: number;
+  status: 'pending' | 'completed' | 'cancelled' | 'dispute';
+  createdAt: Date;
+  deliveredAt?: Date;
 }
 
 const mockProducts: Product[] = [
@@ -91,6 +104,7 @@ const mockProducts: Product[] = [
 ];
 
 export default function Index() {
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGame, setSelectedGame] = useState<GameType>('all');
   const [showSellForm, setShowSellForm] = useState(false);
@@ -99,6 +113,12 @@ export default function Index() {
     game: 'roblox',
     inStock: true
   });
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [currentUserId] = useState('user123');
+  const [showBuyDialog, setShowBuyDialog] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [showTransactions, setShowTransactions] = useState(false);
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -135,6 +155,14 @@ export default function Index() {
               </Button>
             </nav>
             <div className="flex items-center gap-3">
+              <Button 
+                variant="outline" 
+                className="hidden sm:flex border-primary/50 hover:bg-primary/10"
+                onClick={() => setShowTransactions(true)}
+              >
+                <Icon name="ShoppingBag" size={18} className="mr-2" />
+                Мои сделки
+              </Button>
               <Button variant="outline" className="hidden sm:flex border-primary/50 hover:bg-primary/10">
                 <Icon name="LogIn" size={18} className="mr-2" />
                 Войти
@@ -282,14 +310,49 @@ export default function Index() {
                     )}
                   </div>
                 </CardContent>
-                <CardFooter className="p-4 pt-0">
-                  <Button 
-                    className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
-                    disabled={!product.inStock}
-                  >
-                    <Icon name="ShoppingCart" size={18} className="mr-2" />
-                    {product.inStock ? 'Купить' : 'Недоступно'}
-                  </Button>
+                <CardFooter className="p-4 pt-0 flex gap-2">
+                  {product.sellerId === currentUserId ? (
+                    <>
+                      <Button 
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setEditingProduct(product);
+                          setNewProduct(product);
+                          setShowSellForm(true);
+                        }}
+                      >
+                        <Icon name="Edit" size={18} className="mr-2" />
+                        Изменить
+                      </Button>
+                      <Button 
+                        variant="destructive"
+                        className="flex-1"
+                        onClick={() => {
+                          setProducts(products.filter(p => p.id !== product.id));
+                          toast({
+                            title: "Товар удалён",
+                            description: "Объявление успешно удалено",
+                          });
+                        }}
+                      >
+                        <Icon name="Trash2" size={18} className="mr-2" />
+                        Удалить
+                      </Button>
+                    </>
+                  ) : (
+                    <Button 
+                      className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity"
+                      disabled={!product.inStock}
+                      onClick={() => {
+                        setSelectedProduct(product);
+                        setShowBuyDialog(true);
+                      }}
+                    >
+                      <Icon name="ShoppingCart" size={18} className="mr-2" />
+                      {product.inStock ? 'Купить' : 'Недоступно'}
+                    </Button>
+                  )}
                 </CardFooter>
               </Card>
             ))}
@@ -377,36 +440,254 @@ export default function Index() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSellForm(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowSellForm(false);
+              setEditingProduct(null);
+              setNewProduct({ game: 'roblox', inStock: true });
+            }}>
               Отмена
             </Button>
             <Button 
               className="bg-gradient-to-r from-primary to-secondary"
               onClick={() => {
                 if (!newProduct.title || !newProduct.price || !newProduct.seller) {
+                  toast({
+                    title: "Ошибка",
+                    description: "Заполните все обязательные поля",
+                    variant: "destructive",
+                  });
                   return;
                 }
                 
-                const product: Product = {
-                  id: products.length + 1,
-                  title: newProduct.title,
-                  game: newProduct.game || 'roblox',
-                  price: newProduct.price,
-                  image: newProduct.image || 'https://cdn.poehali.dev/projects/addb430d-8f1d-4eca-9a10-b185ef756d76/files/8390a5d1-c8f1-447c-aaac-cb02838f6a7a.jpg',
-                  rating: 4.5,
-                  seller: newProduct.seller,
-                  inStock: true
-                };
+                if (editingProduct) {
+                  setProducts(products.map(p => 
+                    p.id === editingProduct.id 
+                      ? { ...p, ...newProduct }
+                      : p
+                  ));
+                  toast({
+                    title: "Товар обновлён",
+                    description: "Изменения успешно сохранены",
+                  });
+                } else {
+                  const product: Product = {
+                    id: products.length + 1,
+                    title: newProduct.title,
+                    game: newProduct.game || 'roblox',
+                    price: newProduct.price,
+                    image: newProduct.image || 'https://cdn.poehali.dev/projects/addb430d-8f1d-4eca-9a10-b185ef756d76/files/8390a5d1-c8f1-447c-aaac-cb02838f6a7a.jpg',
+                    rating: 4.5,
+                    seller: newProduct.seller,
+                    inStock: true,
+                    sellerId: currentUserId
+                  };
+                  
+                  setProducts([product, ...products]);
+                  toast({
+                    title: "Товар добавлен",
+                    description: "Объявление опубликовано в каталоге",
+                  });
+                }
                 
-                setProducts([product, ...products]);
                 setShowSellForm(false);
+                setEditingProduct(null);
                 setNewProduct({ game: 'roblox', inStock: true });
               }}
             >
-              <Icon name="Plus" size={18} className="mr-2" />
-              Выставить на продажу
+              <Icon name={editingProduct ? "Save" : "Plus"} size={18} className="mr-2" />
+              {editingProduct ? 'Сохранить изменения' : 'Выставить на продажу'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBuyDialog} onOpenChange={setShowBuyDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-heading">Покупка товара</DialogTitle>
+            <DialogDescription>
+              Безопасная сделка с защитой покупателя
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedProduct && (
+            <div className="space-y-4 py-4">
+              <div className="flex gap-4">
+                <img 
+                  src={selectedProduct.image} 
+                  alt={selectedProduct.title}
+                  className="w-24 h-24 rounded-lg object-cover"
+                />
+                <div className="flex-1">
+                  <h3 className="font-heading font-semibold mb-1">{selectedProduct.title}</h3>
+                  <p className="text-sm text-muted-foreground mb-2">Продавец: {selectedProduct.seller}</p>
+                  <p className="text-2xl font-heading font-bold text-primary">{selectedProduct.price}₽</p>
+                </div>
+              </div>
+
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Icon name="Shield" size={20} className="text-primary mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-sm mb-1">Защита покупателя</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Деньги будут заморожены на счёте GameMarket до подтверждения получения товара
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <Icon name="Clock" size={16} className="text-muted-foreground" />
+                  <span>Срок доставки: до 24 часов</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Icon name="Lock" size={16} className="text-muted-foreground" />
+                  <span>Средства заморожены до получения</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Icon name="RefreshCw" size={16} className="text-muted-foreground" />
+                  <span>Возврат при неполучении товара</span>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-2">Как это работает:</h4>
+                <ol className="text-sm space-y-2 text-muted-foreground">
+                  <li>1. Оплачиваете товар — деньги замораживаются</li>
+                  <li>2. Продавец передаёт вам товар</li>
+                  <li>3. Подтверждаете получение — деньги идут продавцу</li>
+                  <li>4. Не получили? Открываете спор — возврат средств</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBuyDialog(false)}>
+              Отмена
+            </Button>
+            <Button 
+              className="bg-gradient-to-r from-primary to-secondary"
+              onClick={() => {
+                if (!selectedProduct) return;
+                
+                const transaction: Transaction = {
+                  id: transactions.length + 1,
+                  productId: selectedProduct.id,
+                  productTitle: selectedProduct.title,
+                  buyerId: currentUserId,
+                  sellerId: selectedProduct.sellerId || 'seller123',
+                  amount: selectedProduct.price,
+                  status: 'pending',
+                  createdAt: new Date()
+                };
+                
+                setTransactions([transaction, ...transactions]);
+                setShowBuyDialog(false);
+                toast({
+                  title: "Покупка оформлена",
+                  description: "Средства заморожены. Ожидайте доставку товара от продавца.",
+                });
+              }}
+            >
+              <Icon name="CreditCard" size={18} className="mr-2" />
+              Оплатить {selectedProduct?.price}₽
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showTransactions} onOpenChange={setShowTransactions}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-heading">Мои сделки</DialogTitle>
+            <DialogDescription>
+              Отслеживайте статус покупок и продаж
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {transactions.length === 0 ? (
+              <div className="text-center py-12">
+                <Icon name="ShoppingBag" size={48} className="mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">У вас пока нет сделок</p>
+              </div>
+            ) : (
+              transactions.map((transaction) => (
+                <Card key={transaction.id} className="bg-card/50">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-heading font-semibold mb-1">{transaction.productTitle}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {transaction.buyerId === currentUserId ? 'Покупка' : 'Продажа'} • {transaction.createdAt.toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant={
+                          transaction.status === 'completed' ? 'default' : 
+                          transaction.status === 'pending' ? 'secondary' :
+                          transaction.status === 'cancelled' ? 'destructive' : 'outline'
+                        }
+                      >
+                        {transaction.status === 'pending' && '⏳ Ожидание'}
+                        {transaction.status === 'completed' && '✅ Завершена'}
+                        {transaction.status === 'cancelled' && '❌ Отменена'}
+                        {transaction.status === 'dispute' && '⚠️ Спор'}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <p className="text-lg font-heading font-bold text-primary">{transaction.amount}₽</p>
+                      
+                      {transaction.status === 'pending' && transaction.buyerId === currentUserId && (
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm"
+                            className="bg-gradient-to-r from-primary to-secondary"
+                            onClick={() => {
+                              setTransactions(transactions.map(t => 
+                                t.id === transaction.id 
+                                  ? { ...t, status: 'completed', deliveredAt: new Date() }
+                                  : t
+                              ));
+                              toast({
+                                title: "Сделка завершена",
+                                description: "Средства переведены продавцу",
+                              });
+                            }}
+                          >
+                            <Icon name="CheckCircle" size={16} className="mr-1" />
+                            Получил товар
+                          </Button>
+                          <Button 
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              setTransactions(transactions.map(t => 
+                                t.id === transaction.id 
+                                  ? { ...t, status: 'dispute' }
+                                  : t
+                              ));
+                              toast({
+                                title: "Спор открыт",
+                                description: "Администрация рассмотрит вашу жалобу",
+                              });
+                            }}
+                          >
+                            <Icon name="AlertCircle" size={16} className="mr-1" />
+                            Не получил
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
