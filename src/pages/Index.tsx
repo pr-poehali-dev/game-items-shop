@@ -3,6 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 import Icon from '@/components/ui/icon';
 
 type GameType = 'all' | 'roblox' | 'dota2';
@@ -88,8 +93,14 @@ const mockProducts: Product[] = [
 export default function Index() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGame, setSelectedGame] = useState<GameType>('all');
+  const [showSellForm, setShowSellForm] = useState(false);
+  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({
+    game: 'roblox',
+    inStock: true
+  });
 
-  const filteredProducts = mockProducts.filter(product => {
+  const filteredProducts = products.filter(product => {
     const matchesSearch = product.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesGame = selectedGame === 'all' || product.game === selectedGame;
     return matchesSearch && matchesGame;
@@ -115,7 +126,11 @@ export default function Index() {
               <Button variant="ghost" className="hover:text-primary transition-colors">
                 Каталог
               </Button>
-              <Button variant="ghost" className="hover:text-primary transition-colors">
+              <Button 
+                variant="ghost" 
+                className="hover:text-primary transition-colors"
+                onClick={() => setShowSellForm(true)}
+              >
                 Продать
               </Button>
             </nav>
@@ -138,7 +153,7 @@ export default function Index() {
         <div className="container mx-auto px-4 relative">
           <div className="max-w-4xl mx-auto text-center animate-fade-in">
             <Badge className="mb-6 bg-primary/20 text-primary border-primary/30 text-sm px-4 py-1">
-              Комиссия всего 3% • Ниже чем у конкурентов
+              Комиссия всего 3%
             </Badge>
             <h2 className="text-4xl sm:text-6xl font-heading font-bold mb-6 leading-tight">
               Покупай игровые предметы
@@ -289,6 +304,111 @@ export default function Index() {
           )}
         </div>
       </section>
+
+      <Dialog open={showSellForm} onOpenChange={setShowSellForm}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-heading">Выставить товар на продажу</DialogTitle>
+            <DialogDescription>
+              Заполните информацию о вашем товаре. После модерации он появится в каталоге.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Название товара *</Label>
+              <Input
+                id="title"
+                placeholder="Например: Robux Pack 10,000"
+                value={newProduct.title || ''}
+                onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="game">Игра *</Label>
+                <Select 
+                  value={newProduct.game} 
+                  onValueChange={(value: 'roblox' | 'dota2') => setNewProduct({ ...newProduct, game: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите игру" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="roblox">🎮 Roblox</SelectItem>
+                    <SelectItem value="dota2">⚔️ Dota 2</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="price">Цена (₽) *</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  placeholder="999"
+                  value={newProduct.price || ''}
+                  onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="image">Ссылка на изображение</Label>
+              <Input
+                id="image"
+                placeholder="https://example.com/image.jpg"
+                value={newProduct.image || ''}
+                onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">Оставьте пустым для использования изображения по умолчанию</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="seller">Ваш никнейм *</Label>
+              <Input
+                id="seller"
+                placeholder="ProGamer"
+                value={newProduct.seller || ''}
+                onChange={(e) => setNewProduct({ ...newProduct, seller: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSellForm(false)}>
+              Отмена
+            </Button>
+            <Button 
+              className="bg-gradient-to-r from-primary to-secondary"
+              onClick={() => {
+                if (!newProduct.title || !newProduct.price || !newProduct.seller) {
+                  return;
+                }
+                
+                const product: Product = {
+                  id: products.length + 1,
+                  title: newProduct.title,
+                  game: newProduct.game || 'roblox',
+                  price: newProduct.price,
+                  image: newProduct.image || 'https://cdn.poehali.dev/projects/addb430d-8f1d-4eca-9a10-b185ef756d76/files/8390a5d1-c8f1-447c-aaac-cb02838f6a7a.jpg',
+                  rating: 4.5,
+                  seller: newProduct.seller,
+                  inStock: true
+                };
+                
+                setProducts([product, ...products]);
+                setShowSellForm(false);
+                setNewProduct({ game: 'roblox', inStock: true });
+              }}
+            >
+              <Icon name="Plus" size={18} className="mr-2" />
+              Выставить на продажу
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <footer className="border-t border-border/50 bg-card/30 py-12 mt-20">
         <div className="container mx-auto px-4">
